@@ -1,0 +1,12 @@
+{
+  "name": "@jlj/kuikly-echo-ohos",
+  "version": "0.0.1",
+  "description": "Kuikly Echo Sound Effect Module for Ohos (KREchoModule)",
+  "main": "src/main/ets/KREchoModule.ets",
+  "author": "jlj",
+  "license": "MIT",
+  "dependencies": {
+    "@kuikly-open/render": "2.7.0"
+  },
+  "devDependencies": {}
+}
