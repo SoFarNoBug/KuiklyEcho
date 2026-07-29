@@ -22,25 +22,35 @@ Kuikly 跨端短音效播放模块，与 KuiklyAudio（长音频播放）完全�
 
 ## 依赖声明
 
+已发布到 **Maven Central**，无需任何 token，直接在依赖处添加 `mavenCentral()` 源即可。
+
 ### 1. settings.gradle.kts
 
 ```kotlin
-maven {
-    url = uri("https://maven.pkg.github.com/SoFarNoBug/KuiklyEcho")
+dependencyResolutionManagement {
+    repositories { mavenCentral() }
 }
 ```
 
 ### 2. shared/build.gradle.kts（KMP 公共层）
 
 ```kotlin
-implementation("com.jlj.kuiklybase:kuiklyecho:0.0.1-2.1.21")
+implementation("io.github.sofarnobug:kuiklyecho:0.0.1-2.1.21")
 ```
 
 ### 3. androidApp/build.gradle.kts（Android 原生层）
 
 ```kotlin
-implementation("com.jlj.kuiklybase:kuiklyechoandroid:0.0.1-2.1.21")
+implementation("io.github.sofarnobug:kuiklyechoandroid:0.0.1-2.1.21")
 ```
+
+### 4. iOS（CocoaPods）
+
+```ruby
+pod 'KuiklyEcho'
+```
+
+> 注：鸿蒙通过 ohpm `ohpm install @jlj/kuikly-echo-ohos` 集成（详见 `@jlj/kuikly-echo-ohos` 子模块 README）。
 
 ## 集成步骤
 
@@ -138,11 +148,22 @@ KuiklyEchoIOS/              # iOS 原生层（AVAudioPlayer）
 KuiklyEchoOhos/             # 鸿蒙原生层（SoundPool）
 ```
 
+## 桥接契约
+
+`MODULE_NAME = "KREchoModule"` 在四端必须完全一致：
+
+- Android 原生类名 / 注册名：`KREchoModule` 以同名注册
+- iOS 原生类名：`KREchoModule`（Kuikly 运行时按类名动态创建）
+- 鸿蒙注册名：`KREchoModule` 以同名注册
+
 ## 发布
 
 ```bash
-# 发布 Maven（KMP + Android）
-./publish-maven.sh
+# 发布到 Maven Central（默认，需 CENTRAL_USERNAME / CENTRAL_PASSWORD 环境变量）
+TARGET=central ./publish-maven.sh
+
+# 或发布到 GitHub Packages（自用兜底）
+TARGET=github MAVEN_USERNAME=xxx MAVEN_PASSWORD=xxx ./publish-maven.sh
 
 # iOS CocoaPods
 cd KuiklyEchoIOS && pod trunk push KuiklyEcho.podspec

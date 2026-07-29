@@ -6,24 +6,22 @@
  * 与 commonMain 的 EchoModule（moduleName = "KREchoModule"）桥接，
  * 在 KuiklyViewDelegate 的 getCustomRenderModuleCreatorRegisterMap 中以同名注册。
  *
- * 能力映射（基于 @ohos.multimedia.media SoundPool）：
- *  - play     -> soundPool.play(soundId, {volume})
- *  - stop     -> soundPool.stop() + soundPool.release()
+ * 能力映射（基于 @ohos.multimedia.media SoundPool，适配 HarmonyOS NEXT / API 12+）：
+ *  - play     -> soundPool.play(soundId, volume, priority, loop, rate)
+ *  - stop     -> soundPool.stop(streamId)
  *  - preload  -> soundPool.load(filePath)
  *  - release  -> soundPool.release()
  *
  * 说明：
  *  - 鸿蒙 SoundPool 支持并发播放多个短音效。
- *  - 音效文件从 rawfile 目录加载。
+ *  - 音效文件从应用沙箱 filesDir/sounds 目录加载（联调时请确保文件已预置）。
  *  - 维护 soundIdMap 缓存，避免重复加载。
- *
- * 注意：本文件属于独立发布库 KuiklyEchoOhos（待联调，无本地鸿蒙编译环境）。
  */
 
 import { common } from '@kit.AbilityKit';
-import { KuiklyRenderBaseModule } from '@kuikly-open/render';
-import { KuiklyRenderCallback } from '@kuikly-open/render';
+import { KuiklyRenderBaseModule, KuiklyRenderCallback, KTAny } from '@kuikly-open/render';
 import media from '@ohos.multimedia.media';
+import audio from '@ohos.multimedia.audio';
 
 export class KREchoModule extends KuiklyRenderBaseModule {
   static readonly MODULE_NAME = "KREchoModule";
@@ -41,7 +39,7 @@ export class KREchoModule extends KuiklyRenderBaseModule {
     return false;
   }
 
-  call(method: string, params: KRAny, callback: KuiklyRenderCallback): KRAny {
+  call(method: string, params: KTAny, callback: KuiklyRenderCallback): KTAny {
     switch (method) {
       case KREchoModule.METHOD_PLAY:
         this.handlePlay(params);
@@ -61,7 +59,7 @@ export class KREchoModule extends KuiklyRenderBaseModule {
     return null;
   }
 
-  private parseParams(params: KRAny): Record<string, Object> {
+  private parseParams(params: KTAny): Record<string, Object> {
     if (!params) {
       return {};
     }
@@ -79,7 +77,11 @@ export class KREchoModule extends KuiklyRenderBaseModule {
     if (this.soundPoolPromise) {
       return this.soundPoolPromise;
     }
-    this.soundPoolPromise = media.createSoundPool().then((pool) => {
+    const renderInfo: audio.AudioRendererInfo = {
+      usage: audio.StreamUsage.STREAM_USAGE_UNKNOWN,
+      rendererFlags: 0
+    };
+    this.soundPoolPromise = media.createSoundPool(5, renderInfo).then((pool) => {
       this.soundPool = pool;
       this.soundPoolPromise = undefined;
       return pool;
@@ -105,7 +107,7 @@ export class KREchoModule extends KuiklyRenderBaseModule {
     }
   }
 
-  private async handlePlay(params: KRAny): Promise<void> {
+  private async handlePlay(params: KTAny): Promise<void> {
     const p = this.parseParams(params);
     const soundName = (p["soundName"] as string) ?? "";
     const volume = (p["volume"] as number) ?? 1.0;
@@ -115,19 +117,11 @@ export class KREchoModule extends KuiklyRenderBaseModule {
       const soundId = await this.loadSound(soundName);
       if (soundId === -1) return;
       const pool = await this.ensureSoundPool();
-      const streamId = await pool.play({
-        soundId: soundId,
-        streamInfo: {
-          audioSampleRate: media.AudioSamplingRate.SAMPLE_RATE_44100,
-          channels: media.AudioChannel.CHANNEL_1,
-          sampleFormat: media.AudioSampleFormat.SAMPLE_FORMAT_S16LE
-        },
-        streamOptions: {
-          priority: 0,
-          loop: 0,
-          volume: volume,
-          rate: 1.0
-        }
+      const streamId: number = await pool.play(soundId, {
+        leftVolume: volume,
+        rightVolume: volume,
+        loop: 0,
+        rate: 1.0
       });
       this.activeStreamIds.add(streamId);
     } catch (e) {
@@ -148,7 +142,7 @@ export class KREchoModule extends KuiklyRenderBaseModule {
     }
   }
 
-  private async handlePreload(params: KRAny): Promise<void> {
+  private async handlePreload(params: KTAny): Promise<void> {
     const p = this.parseParams(params);
     const soundName = (p["soundName"] as string) ?? "";
     if (!soundName) return;

@@ -1,7 +1,10 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     kotlin("multiplatform")
     id("com.android.library")
-    `maven-publish`
+    id("org.jetbrains.dokka")
+    id("com.vanniktech.maven.publish")
 }
 
 val mavenVersion: String = findProperty("mavenVersion") as? String
@@ -42,19 +45,22 @@ kotlin {
     iosArm64()
     iosSimulatorArm64()
 
+    ohosArm64 {
+    }
+
     sourceSets {
         val commonMain by getting {
             dependencies {
-                compileOnly("com.tencent.kuikly-open:core:${Version.getKuiklyVersion()}")
-                compileOnly("com.tencent.kuikly-open:core-annotations:${Version.getKuiklyVersion()}")
+                compileOnly("com.tencent.kuikly-open:core:${Version.getKuiklyOhosVersion()}")
+                compileOnly("com.tencent.kuikly-open:core-annotations:${Version.getKuiklyOhosVersion()}")
                 // LocalEchoModule 依赖 Compose runtime（androidx.compose.runtime.*），仅编译期、不传递
-                compileOnly("com.tencent.kuikly-open:compose:${Version.getKuiklyVersion()}")
+                compileOnly("com.tencent.kuikly-open:compose:${Version.getKuiklyOhosVersion()}")
             }
         }
 
         val androidMain by getting {
             dependencies {
-                compileOnly("com.tencent.kuikly-open:core-render-android:${Version.getKuiklyVersion()}")
+                compileOnly("com.tencent.kuikly-open:core-render-android:${Version.getKuiklyOhosVersion()}")
             }
         }
         val iosX64Main by getting
@@ -81,23 +87,48 @@ android {
     }
 }
 
+// 可选：保留 GitHub Packages 发布能力（仅当显式传入 mavenRepoUrl 时启用，不影响 Central 发布）
 publishing {
     repositories {
-        maven {
-            url = uri(mavenRepoUrl)
-            credentials {
-                username = mavenUsername
-                password = mavenPassword
+        val gpUrl = findProperty("mavenRepoUrl") as? String
+        if (!gpUrl.isNullOrBlank()) {
+            maven {
+                url = uri(gpUrl)
+                credentials {
+                    username = findProperty("mavenUsername") as? String ?: ""
+                    password = findProperty("mavenPassword") as? String ?: ""
+                }
             }
         }
     }
 }
 
-// GitHub Packages 要求 artifactId 全小写，否则 PUT 返回 422
-afterEvaluate {
-    publishing.publications.forEach { publication ->
-        if (publication is MavenPublication) {
-            publication.artifactId = publication.artifactId.lowercase()
+// ---- Maven Central 发布（vanniktech 统一接管：坐标 / POM / 签名 / 上传）----
+mavenPublishing {
+    coordinates("io.github.sofarnobug", "kuiklyecho", project.version.toString())
+        publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+        if (System.getenv("SKIP_SIGN") != "1") signAllPublications()
+
+    pom {
+        name.set("KuiklyEcho")
+        description.set("跨端回音 / 音效反馈 Kuikly Module（KMP：Android / iOS / JS）")
+        url.set("https://github.com/SoFarNoBug/KuiklyEcho")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("sofarnobug")
+                name.set("SoFarNoBug")
+            }
+        }
+        scm {
+            url.set("https://github.com/SoFarNoBug/KuiklyEcho")
+            connection.set("scm:git:git://github.com/SoFarNoBug/KuiklyEcho.git")
+            developerConnection.set("scm:git:ssh://git@github.com/SoFarNoBug/KuiklyEcho.git")
         }
     }
 }

@@ -1,7 +1,9 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     id("com.android.library")
     kotlin("android")
-    `maven-publish`
+    id("com.vanniktech.maven.publish")
 }
 
 val mavenVersion: String = findProperty("mavenVersion") as? String
@@ -44,27 +46,48 @@ dependencies {
     implementation("androidx.core:core-ktx:1.6.0")
 }
 
+// 可选：保留 GitHub Packages 发布能力（仅当显式传入 mavenRepoUrl 时启用，不影响 Central 发布）
 publishing {
     repositories {
-        maven {
-            url = uri(mavenRepoUrl)
-            credentials {
-                username = mavenUsername
-                password = mavenPassword
+        val gpUrl = findProperty("mavenRepoUrl") as? String
+        if (!gpUrl.isNullOrBlank()) {
+            maven {
+                url = uri(gpUrl)
+                credentials {
+                    username = findProperty("mavenUsername") as? String ?: ""
+                    password = findProperty("mavenPassword") as? String ?: ""
+                }
             }
         }
     }
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"])
-                groupId = project.group.toString()
-                artifactId = "kuiklyechoandroid"
-                version = project.version.toString()
+// ---- Maven Central 发布（vanniktech 统一接管：坐标 / POM / 签名 / 上传）----
+mavenPublishing {
+    coordinates("io.github.sofarnobug", "kuiklyechoandroid", project.version.toString())
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL, automaticRelease = true)
+    signAllPublications()
+
+    pom {
+        name.set("KuiklyEchoAndroid")
+        description.set("KuiklyEcho 的 Android 原生实现层")
+        url.set("https://github.com/SoFarNoBug/KuiklyEcho")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
             }
+        }
+        developers {
+            developer {
+                id.set("sofarnobug")
+                name.set("SoFarNoBug")
+            }
+        }
+        scm {
+            url.set("https://github.com/SoFarNoBug/KuiklyEcho")
+            connection.set("scm:git:git://github.com/SoFarNoBug/KuiklyEcho.git")
+            developerConnection.set("scm:git:ssh://git@github.com/SoFarNoBug/KuiklyEcho.git")
         }
     }
 }
