@@ -8,10 +8,11 @@
 
 #import "KREchoModule.h"
 #import <AVFoundation/AVFoundation.h>
-@import ObjectiveC.runtime;
 
 @interface KREchoModule ()
 @property (nonatomic, strong) NSMutableDictionary<NSString *, AVAudioPlayer *> *playerCache;
+// player -> cacheKey 反向映射，用于播放结束回调时定位 key（弱引用 key，避免循环引用）
+@property (nonatomic, strong) NSMapTable<AVAudioPlayer *, NSString *> *playerToKey;
 @end
 
 @implementation KREchoModule
@@ -37,7 +38,7 @@
     player.delegate = (id<AVAudioPlayerDelegate>)self;
     NSString *key = [NSString stringWithFormat:@"%@_%p", soundName, player];
     self.playerCache[key] = player;
-    objc_setAssociatedObject(player, "cacheKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self.playerToKey setObject:key forKey:player];
 
     player.volume = volume;
     [player play];
@@ -49,6 +50,7 @@
         [player stop];
     }
     [self.playerCache removeAllObjects];
+    [self.playerToKey removeAllObjects];
 }
 
 #pragma mark - 预加载音效
@@ -75,11 +77,13 @@
         [player stop];
     }
     [self.playerCache removeAllObjects];
+    [self.playerToKey removeAllObjects];
 }
 
 #pragma mark - AVAudioPlayerDelegate
 - (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    NSString *key = objc_getAssociatedObject(player, "cacheKey");
+    NSString *key = [self.playerToKey objectForKey:player];
+    [self.playerToKey removeObjectForKey:player];
     if (key) {
         [self.playerCache removeObjectForKey:key];
     }
@@ -122,6 +126,13 @@
         _playerCache = [NSMutableDictionary dictionary];
     }
     return _playerCache;
+}
+
+- (NSMapTable<AVAudioPlayer *, NSString *> *)playerToKey {
+    if (_playerToKey == nil) {
+        _playerToKey = [NSMapTable mapTableWithWeakToStrongObjects];
+    }
+    return _playerToKey;
 }
 
 @end
