@@ -8,6 +8,7 @@
 
 #import "KREchoModule.h"
 #import <AVFoundation/AVFoundation.h>
+#import <objc/runtime.h>
 
 @interface KREchoModule ()
 @property (nonatomic, strong) NSMutableDictionary<NSString *, AVAudioPlayer *> *playerCache;
