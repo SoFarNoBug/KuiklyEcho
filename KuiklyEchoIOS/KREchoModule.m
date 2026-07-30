@@ -11,8 +11,9 @@
 
 @interface KREchoModule ()
 @property (nonatomic, strong) NSMutableDictionary<NSString *, AVAudioPlayer *> *playerCache;
-// player -> cacheKey 反向映射，用于播放结束回调时定位 key（弱引用 key，避免循环引用）
-@property (nonatomic, strong) NSMapTable<AVAudioPlayer *, NSString *> *playerToKey;
+// player -> cacheKey 反向映射，用于播放结束回调时定位 key
+// 用 NSMutableDictionary 而非 NSMapTable：NSMapTable 部分初始化器在低版本 iOS 不可用，且需在 finish/stop/release 时显式清理，无泄漏风险
+@property (nonatomic, strong) NSMutableDictionary<AVAudioPlayer *, NSString *> *playerToKey;
 @end
 
 @implementation KREchoModule
@@ -128,9 +129,9 @@
     return _playerCache;
 }
 
-- (NSMapTable<AVAudioPlayer *, NSString *> *)playerToKey {
+- (NSMutableDictionary<AVAudioPlayer *, NSString *> *)playerToKey {
     if (_playerToKey == nil) {
-        _playerToKey = [NSMapTable mapTableWithWeakToStrongObjects];
+        _playerToKey = [NSMutableDictionary dictionary];
     }
     return _playerToKey;
 }

@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name         = 'KuiklyEcho'
-  spec.version      = '2026.7.30-1'
+  spec.version      = '2026.7.30-2'
   spec.summary      = 'Kuikly Echo Sound Effect Module for iOS (KREchoModule)'
   spec.description  = '跨端短音效播放 Kuikly Module 的 iOS 原生实现（KREchoModule），基于 AVAudioPlayer。'
   spec.homepage     = 'https://github.com/SoFarNoBug/KuiklyEcho'
