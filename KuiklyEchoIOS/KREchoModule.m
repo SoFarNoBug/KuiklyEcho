@@ -12,8 +12,10 @@
 @interface KREchoModule ()
 @property (nonatomic, strong) NSMutableDictionary<NSString *, AVAudioPlayer *> *playerCache;
 // player -> cacheKey 反向映射，用于播放结束回调时定位 key
-// 用 NSMutableDictionary 而非 NSMapTable：NSMapTable 部分初始化器在低版本 iOS 不可用，且需在 finish/stop/release 时显式清理，无泄漏风险
-@property (nonatomic, strong) NSMutableDictionary<AVAudioPlayer *, NSString *> *playerToKey;
+// 用 NSMutableDictionary 而非 NSMapTable：NSMapTable 部分初始化器在低版本 iOS 不可用。
+// key 用 NSValue(valueWithNonretainedObject:) 包裹 player：AVAudioPlayer 不遵守 NSCopying，
+// 不能直接作字典 key（否则 setObject:forKey: 发 copyWithZone: 崩溃）。finish/stop/release 时清理，无泄漏。
+@property (nonatomic, strong) NSMutableDictionary<NSValue *, NSString *> *playerToKey;
 @end
 
 @implementation KREchoModule
@@ -39,7 +41,7 @@
     player.delegate = (id<AVAudioPlayerDelegate>)self;
     NSString *key = [NSString stringWithFormat:@"%@_%p", soundName, player];
     self.playerCache[key] = player;
-    [self.playerToKey setObject:key forKey:player];
+    [self.playerToKey setObject:key forKey:[NSValue valueWithNonretainedObject:player]];
 
     player.volume = volume;
     [player play];
@@ -83,8 +85,9 @@
 
 #pragma mark - AVAudioPlayerDelegate
 - (void)audioPlayerDidFinishPlaying:(AVAudioPlayer *)player successfully:(BOOL)flag {
-    NSString *key = [self.playerToKey objectForKey:player];
-    [self.playerToKey removeObjectForKey:player];
+    NSValue *playerKey = [NSValue valueWithNonretainedObject:player];
+    NSString *key = [self.playerToKey objectForKey:playerKey];
+    [self.playerToKey removeObjectForKey:playerKey];
     if (key) {
         [self.playerCache removeObjectForKey:key];
     }
@@ -129,7 +132,7 @@
     return _playerCache;
 }
 
-- (NSMutableDictionary<AVAudioPlayer *, NSString *> *)playerToKey {
+- (NSMutableDictionary<NSValue *, NSString *> *)playerToKey {
     if (_playerToKey == nil) {
         _playerToKey = [NSMutableDictionary dictionary];
     }
