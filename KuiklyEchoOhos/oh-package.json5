@@ -1,6 +1,6 @@
 {
   "name": "@jlj/kuikly-echo-ohos",
-  "version": "2026.7.29-1",
+  "version": "0.2.0",
   "description": "Kuikly Echo Sound Effect Module for Ohos (KREchoModule)",
   "main": "src/main/ets/KREchoModule.ets",
   "author": "jlj",
@@ -13,7 +13,7 @@
   "homepage": "https://github.com/SoFarNoBug/KuiklyEcho#readme",
   "keywords": ["kuikly", "echo", "sound", "audio", "ohos", "harmonyos"],
   "dependencies": {
-    "@kuikly-open/render": "2.7.0"
+    "@kuikly-open/render": "2.23.0"
   },
   "devDependencies": {}
 }

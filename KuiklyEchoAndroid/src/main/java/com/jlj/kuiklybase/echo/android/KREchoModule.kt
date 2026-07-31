@@ -33,6 +33,11 @@ public class KREchoModule : KuiklyRenderBaseModule() {
     private var soundPool: SoundPool? = null
     private val soundIdMap = mutableMapOf<String, Int>()
     private val activeStreamIds = mutableSetOf<Int>()
+    // 加载状态与门控（修复首播静音：play 必须等 onLoadComplete）
+    private val lock = Any()
+    private val loadedSoundIds = mutableSetOf<Int>()
+    private val pendingAfds = mutableMapOf<Int, android.content.res.AssetFileDescriptor>()
+    private val pendingPlays = mutableMapOf<Int, MutableList<() -> Unit>>()
 
     override fun call(method: String, params: String?, callback: KuiklyRenderCallback?): Any? {
         return try {
@@ -74,7 +79,24 @@ public class KREchoModule : KuiklyRenderBaseModule() {
             .setMaxStreams(MAX_STREAMS)
             .setAudioAttributes(attrs)
             .build()
-        pool.setOnLoadCompleteListener { _, _, _ -> }
+        // 官方规范：load 是异步的，onLoadComplete 回调代表该 soundId 真正解码就绪。
+        // 这里负责：① 关闭 pending 中的 fd（之前提前 close 导致首播静音）；
+        // ② 标记已就绪；③ 触发等待中的待播请求。
+        pool.setOnLoadCompleteListener { _, sampleId, status ->
+            synchronized(lock) {
+                pendingAfds.remove(sampleId)?.let { afd ->
+                    try {
+                        afd.close()
+                    } catch (_: Exception) {
+                        // ignore
+                    }
+                }
+                if (status == 0) {
+                    loadedSoundIds.add(sampleId)
+                }
+                pendingPlays.remove(sampleId)?.forEach { it() }
+            }
+        }
         soundPool = pool
         return pool
     }
@@ -83,12 +105,13 @@ public class KREchoModule : KuiklyRenderBaseModule() {
         soundIdMap[soundName]?.let { return it }
         val ctx = context ?: return -1
         val afd = ctx.assets.openFd("sounds/$soundName")
-        try {
+        synchronized(lock) {
+            // 官方规范：load(AssetFileDescriptor) 为异步读取，fd 必须在 onLoadComplete 回调里
+            // 才能关闭；这里仅登记 pendingAfds，立即 close 会令后台读取未完成时 fd 失效而静音。
             val soundId = getOrCreateSoundPool().load(afd, 1)
             soundIdMap[soundName] = soundId
+            pendingAfds[soundId] = afd
             return soundId
-        } finally {
-            afd.close()
         }
     }
 
@@ -100,6 +123,18 @@ public class KREchoModule : KuiklyRenderBaseModule() {
         val soundId = loadSound(soundName)
         if (soundId == -1) return
         val pool = getOrCreateSoundPool()
+        // 官方规范：play() 必须在 onLoadComplete 之后调用，否则返回 0（静音）。
+        // 未就绪则登记待播，待加载完成回调触发实际播放。
+        if (loadedSoundIds.contains(soundId)) {
+            doPlay(pool, soundId, volume)
+        } else {
+            synchronized(lock) {
+                pendingPlays.getOrPut(soundId) { mutableListOf() }.add { doPlay(pool, soundId, volume) }
+            }
+        }
+    }
+
+    private fun doPlay(pool: SoundPool, soundId: Int, volume: Float) {
         val streamId = pool.play(soundId, volume, volume, 0, 0, 1f)
         if (streamId != 0) {
             synchronized(activeStreamIds) {
@@ -126,6 +161,19 @@ public class KREchoModule : KuiklyRenderBaseModule() {
     }
 
     private fun handleRelease() {
+        synchronized(lock) {
+            // 清理尚未触发 onLoadComplete 的 fd 与待播队列，避免泄漏
+            for (afd in pendingAfds.values) {
+                try {
+                    afd.close()
+                } catch (_: Exception) {
+                    // ignore
+                }
+            }
+            pendingAfds.clear()
+            loadedSoundIds.clear()
+            pendingPlays.clear()
+        }
         soundPool?.release()
         soundPool = null
         soundIdMap.clear()

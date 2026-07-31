@@ -33,8 +33,17 @@
 
     [self ensureAudioSession];
 
-    // 每次 play 创建新 AVAudioPlayer 实例，支持并发播放
-    AVAudioPlayer *player = [self createPlayerWithSoundName:soundName];
+    // 优先复用 preload 已准备好的 player（零延迟），否则创建新实例。
+    NSString *preloadKey = [NSString stringWithFormat:@"preload_%@", soundName];
+    AVAudioPlayer *player = [self.playerCache objectForKey:preloadKey];
+    if (player) {
+        // 复用预加载实例：重置到开头，避免从上次结束位置播放
+        [self.playerCache removeObjectForKey:preloadKey];
+        player.currentTime = 0;
+    } else {
+        // 每次 play 创建新 AVAudioPlayer 实例，支持并发播放
+        player = [self createPlayerWithSoundName:soundName];
+    }
     if (player == nil) return;
 
     // 先设置 delegate 和 cache，再 play，避免极短音效播放完毕后 delegate 回调丢失
@@ -118,7 +127,11 @@
 - (void)ensureAudioSession {
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;
-    [session setCategory:AVAudioSessionCategoryAmbient error:&error];
+    // 反馈音效类：改用 Playback 而非 Ambient，使 UI 提示音不被设备静音/响铃键压制；
+    // MixWithOthers 保证不中断后台音乐等其他音频。
+    [session setCategory:AVAudioSessionCategoryPlayback
+             withOptions:AVAudioSessionCategoryOptionMixWithOthers
+                   error:&error];
     if (error) {
         NSLog(@"[KREchoModule] setCategory error: %@", error.localizedDescription);
     }
